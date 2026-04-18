@@ -1,0 +1,174 @@
+// ==========================================
+// CONFIGURATION
+// ==========================================
+const SHEET_ID = 'PASTE_YOUR_NEW_SHEET_ID_HERE';
+const SHEET_NAME = 'Sheet1'; // Ensure your tab is named exactly this
+
+// 1. API RECEIVER (For GitHub Frontend)
+// This function listens for the 'fetch' POST requests from your GitHub HTML
+function doPost(e) {
+  let response = {};
+  
+  try {
+    // Parse the incoming JSON data from the frontend
+    const params = JSON.parse(e.postData.contents);
+    const action = params.action;
+    
+    // Route to the correct function based on the action
+    if (action === 'register') {
+      response = registerUser(params.email, params.password);
+    } else if (action === 'login') {
+      response = loginUser(params.email, params.password);
+    } else {
+      response = { success: false, message: 'Invalid action requested.' };
+    }
+  } catch (error) {
+    response = { success: false, message: 'Server error processing request: ' + error.toString() };
+  }
+
+  // Return the result as JSON back to your GitHub frontend
+  return ContentService.createTextOutput(JSON.stringify(response))
+    .setMimeType(ContentService.MimeType.JSON);
+}
+
+// 2. REGISTER FUNCTION
+function registerUser(email, password) {
+  const sheet = SpreadsheetApp.openById(SHEET_ID).getSheetByName(SHEET_NAME);
+  const data = sheet.getDataRange().getValues();
+  
+  // Check if email already exists
+  for (let i = 1; i < data.length; i++) {
+    if (data[i][1].toString().toLowerCase() === email.toLowerCase()) {
+      return { success: false, message: 'Este correo ya está registrado.' };
+    }
+  }
+  
+  // Create a simple unique UserID
+  const userId = 'USR-' + Utilities.getUuid().substring(0,8).toUpperCase();
+  
+  // Append new row with 10 columns: 
+  // UserID (A), Email (B), Pass (C), Dominio (D), Renovacion (E), Correo (F), Clave (G), Estado (H), Notificacion (I), Proveedor (J)
+  sheet.appendRow([userId, email, password, 'Pendiente...', 'Pendiente...', 'Pendiente...', 'Pendiente...', 'Activo', '', 'Por definir']);
+  
+  // --- NEW SECURITY UPDATE ---
+  // Get the row we just added
+  const lastRow = sheet.getLastRow();
+  
+  // Hide the text of the password columns (Column 3 and Column 7) by making the font white
+  // You can still see the passwords by clicking the cell and looking at the Formula Bar at the top of Sheets
+  sheet.getRange(lastRow, 3).setFontColor('#ffffff'); // Hides Clave_Registro
+  sheet.getRange(lastRow, 7).setFontColor('#ffffff'); // Hides Clave_Acceso
+  // ---------------------------
+
+  return { success: true, message: 'Cuenta creada exitosamente. Por favor, inicia sesión.' };
+}
+
+// 3. LOGIN FUNCTION
+function loginUser(email, password) {
+  const sheet = SpreadsheetApp.openById(SHEET_ID).getSheetByName(SHEET_NAME);
+  const data = sheet.getDataRange().getValues();
+  
+  // Search for the user
+  for (let i = 1; i < data.length; i++) {
+    let sheetEmail = data[i][1].toString().toLowerCase();
+    let sheetPass = data[i][2].toString();
+    
+    if (sheetEmail === email.toLowerCase() && sheetPass === password) {
+      
+      // Format the date if it's a valid date object in Sheets
+      let rawFecha = data[i][4];
+      let fechaFormateada = rawFecha;
+      if (rawFecha instanceof Date) {
+        fechaFormateada = Utilities.formatDate(rawFecha, Session.getScriptTimeZone(), "dd/MM/yyyy");
+      }
+
+      // Return credentials to the frontend (Excluding the 'Proveedor' to keep it internal)
+      return {
+        success: true,
+        data: {
+          dominio: data[i][3] || 'No asignado',
+          renovacion: fechaFormateada || 'No asignado',
+          correoComercial: data[i][5] || 'Procesando...',
+          claveAcceso: data[i][6] || 'Procesando...'
+        }
+      };
+    }
+  }
+  
+  return { success: false, message: 'Correo o contraseña incorrectos.' };
+}
+
+// 4. AUTOMATED EMAIL NOTIFICATION FUNCTION
+function revisarRenovacionesYNotificar() {
+  const sheet = SpreadsheetApp.openById(SHEET_ID).getSheetByName(SHEET_NAME);
+  const data = sheet.getDataRange().getValues();
+  
+  const hoy = new Date();
+  hoy.setHours(0, 0, 0, 0); 
+
+  const aliases = GmailApp.getAliases();
+  const remitente = aliases.includes('no-reply@mailerbox.me') ? 'no-reply@mailerbox.me' : Session.getActiveUser().getEmail();
+
+  for (let i = 1; i < data.length; i++) {
+    let email = data[i][1];
+    let dominio = data[i][3];
+    let fechaRenovacion = data[i][4];
+    let estadoCuenta = data[i][7]; // Column H
+    let notificacionEnviada = data[i][8]; // Column I
+    
+    if (estadoCuenta !== 'Activo' || !(fechaRenovacion instanceof Date)) continue;
+
+    let tiempoRestante = fechaRenovacion.getTime() - hoy.getTime();
+    let diasFaltantes = Math.ceil(tiempoRestante / (1000 * 3600 * 24));
+    
+    let asunto = '';
+    let cuerpo = '';
+    let nuevoEstadoNotificacion = '';
+
+    if (diasFaltantes === 7 && notificacionEnviada !== 'Aviso 7 días') {
+      asunto = `Aviso: Tu servicio para ${dominio} vence en 7 días`;
+      cuerpo = `Hola,\n\nTe recordamos que tu servicio de correo comercial para el dominio ${dominio} vencerá el ${Utilities.formatDate(fechaRenovacion, Session.getScriptTimeZone(), "dd/MM/yyyy")}.\n\nPor favor, renueva a tiempo para evitar la suspensión de tu cuenta.\n\nSaludos,\nEl equipo de MAILERBOX.ME`;
+      nuevoEstadoNotificacion = 'Aviso 7 días';
+    } 
+    else if (diasFaltantes === 1 && notificacionEnviada !== 'Aviso 1 día') {
+      asunto = `URGENTE: Tu servicio para ${dominio} vence MAÑANA`;
+      cuerpo = `Hola,\n\nEste es un recordatorio de que tu servicio de correo para ${dominio} vence mañana.\n\nEvita la interrupción del servicio renovando hoy mismo.\n\nSaludos,\nEl equipo de MAILERBOX.ME`;
+      nuevoEstadoNotificacion = 'Aviso 1 día';
+    } 
+    else if (diasFaltantes < 0 && notificacionEnviada !== 'Expirado') {
+      asunto = `Aviso: Tu servicio para ${dominio} ha expirado`;
+      cuerpo = `Hola,\n\nTu cuenta para el dominio ${dominio} ha expirado. El servicio podría ser suspendido en cualquier momento.\n\nPor favor contáctanos lo antes posible para restablecer tu cuenta.\n\nSaludos,\nEl equipo de MAILERBOX.ME`;
+      nuevoEstadoNotificacion = 'Expirado';
+    }
+
+    if (nuevoEstadoNotificacion !== '') {
+      GmailApp.sendEmail(email, asunto, cuerpo, {
+        from: remitente,
+        name: 'MAILERBOX.ME'
+      });
+      // Column I is index 9 when using 1-based getRange
+      sheet.getRange(i + 1, 9).setValue(nuevoEstadoNotificacion);
+    }
+  }
+}
+
+// 5. HELPER FUNCTION TO INSTALL DAILY TRIGGER
+function instalarDisparadorDiario() {
+  const triggers = ScriptApp.getProjectTriggers();
+  for (let i = 0; i < triggers.length; i++) {
+    ScriptApp.deleteTrigger(triggers[i]);
+  }
+  
+  ScriptApp.newTrigger('revisarRenovacionesYNotificar')
+    .timeBased()
+    .everyDays(1)
+    .atHour(8)
+    .create();
+    
+  Logger.log("Daily trigger installed successfully!");
+}
+
+// Simple fallback to verify the API is alive if you visit the URL directly in your browser
+function doGet(e) {
+  return ContentService.createTextOutput("MAILERBOX API is running.");
+}
