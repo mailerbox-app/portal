@@ -1,1 +1,566 @@
 
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Vault - MAILERBOX.ME</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f3f4f6;
+        }
+        
+        /* Custom Primary Color */
+        .bg-primary { background-color: #8b84f5; }
+        .bg-primary:hover { background-color: #7a73e6; }
+        .text-primary { color: #8b84f5; }
+        .border-primary { border-color: #8b84f5; }
+
+        .copy-btn { transition: all 0.2s ease-in-out; }
+        
+        .toast {
+            visibility: hidden;
+            min-width: 250px;
+            background-color: #333;
+            color: #fff;
+            text-align: center;
+            border-radius: 8px;
+            padding: 12px;
+            position: fixed;
+            z-index: 50;
+            left: 50%;
+            bottom: 30px;
+            transform: translateX(-50%);
+            opacity: 0;
+            transition: opacity 0.3s, visibility 0.3s;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        .toast.show {
+            visibility: visible;
+            opacity: 1;
+        }
+
+        /* Loading Spinner */
+        .loader {
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #8b84f5;
+            border-radius: 50%;
+            width: 24px;
+            height: 24px;
+            animation: spin 1s linear infinite;
+            display: none;
+        }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    </style>
+</head>
+<body class="antialiased min-h-screen flex items-center justify-center p-4">
+
+    <!-- CONTENEDOR PRINCIPAL -->
+    <div class="max-w-3xl w-full bg-white rounded-2xl shadow-xl overflow-hidden relative">
+        
+        <!-- PANTALLA DE LOADING OVERLAY (Oculta por defecto) -->
+        <div id="loading-overlay" class="absolute inset-0 bg-white/90 z-40 hidden flex-col items-center justify-center">
+            <div class="loader" style="display: block; width: 40px; height: 40px; border-width: 4px;"></div>
+            <p class="mt-4 text-gray-600 font-medium">Conectando de forma segura...</p>
+        </div>
+
+        <!-- HEADER GLOBAL -->
+        <div class="bg-primary px-8 py-10 text-center relative overflow-hidden">
+            <div class="absolute top-0 left-0 w-32 h-32 bg-white opacity-10 rounded-full -translate-x-1/2 -translate-y-1/2"></div>
+            <div class="absolute bottom-0 right-0 w-40 h-40 bg-white opacity-10 rounded-full translate-x-1/4 translate-y-1/4"></div>
+            
+            <!-- Custom Logo -->
+            <img src="https://bucket.mlcdn.com/a/3336/3336910/images/bda001f97052c534cb55e599b2e13f981127eba9.png" alt="MAILERBOX.ME Logo" class="mx-auto mb-3" style="width: 200px; height: auto;">
+            
+            <p class="text-white/90 font-medium text-lg" id="header-subtitle">Bóveda de Cliente Segura</p>
+            
+            <!-- Botón de Logout (solo visible en el dashboard) -->
+            <button id="logout-btn" onclick="showView('login-view')" class="hidden absolute top-4 right-4 text-white/80 hover:text-white text-sm font-medium bg-white/10 px-3 py-1.5 rounded-lg transition">
+                Cerrar Sesión
+            </button>
+        </div>
+
+        <!-- ========================================== -->
+        <!-- PANTALLA 1: INICIO DE SESIÓN               -->
+        <!-- ========================================== -->
+        <div id="login-view" class="p-8 max-w-md mx-auto w-full">
+            <h2 class="text-2xl font-bold text-gray-800 text-center mb-6">Iniciar Sesión</h2>
+            
+            <div id="login-error" class="hidden mb-4 bg-red-50 text-red-600 p-3 rounded text-sm border border-red-200"></div>
+            <div id="login-success" class="hidden mb-4 bg-green-50 text-green-600 p-3 rounded text-sm border border-green-200"></div>
+
+            <form id="login-form" onsubmit="handleLogin(event)" class="space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Correo Electrónico (Registro)</label>
+                    <input type="email" id="login-email" required class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary outline-none transition">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Contraseña</label>
+                    <input type="password" id="login-pass" required class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary outline-none transition">
+                </div>
+                <button type="submit" class="w-full bg-primary hover:bg-[#7a73e6] text-white font-medium py-2.5 rounded-lg transition flex justify-center items-center">
+                    <span>Acceder a mis Credenciales</span>
+                </button>
+            </form>
+            <div class="mt-6 text-center text-sm text-gray-600">
+                ¿No tienes cuenta? <a href="#" onclick="showView('register-view')" class="text-primary hover:underline font-medium">Registrarme ahora</a>
+            </div>
+        </div>
+
+        <!-- ========================================== -->
+        <!-- PANTALLA 2: REGISTRO DE USUARIO            -->
+        <!-- ========================================== -->
+        <div id="register-view" class="hidden p-8 max-w-md mx-auto w-full">
+            <h2 class="text-2xl font-bold text-gray-800 text-center mb-6">Crear Cuenta</h2>
+            
+            <div id="register-error" class="hidden mb-4 bg-red-50 text-red-600 p-3 rounded text-sm border border-red-200 break-words"></div>
+            
+            <div class="mb-4 bg-blue-50 text-blue-700 p-3 rounded text-sm border border-blue-200">
+                Al registrarte, tu cuenta quedará vinculada para recibir tus credenciales de correo comercial de forma segura.
+            </div>
+
+            <form id="register-form" onsubmit="handleRegister(event)" class="space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Correo Electrónico</label>
+                    <input type="email" id="reg-email" required class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary outline-none transition">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Crea una Contraseña</label>
+                    <input type="password" id="reg-pass" required class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary outline-none transition">
+                </div>
+                <button type="submit" class="w-full bg-gray-800 hover:bg-gray-900 text-white font-medium py-2.5 rounded-lg transition">
+                    Crear Bóveda
+                </button>
+            </form>
+            <div class="mt-6 text-center text-sm text-gray-600">
+                ¿Ya tienes cuenta? <a href="#" onclick="showView('login-view')" class="text-primary hover:underline font-medium">Volver a Iniciar Sesión</a>
+            </div>
+        </div>
+
+        <!-- ========================================== -->
+        <!-- PANTALLA 3: DASHBOARD DE CREDENCIALES      -->
+        <!-- ========================================== -->
+        <div id="dashboard-view" class="hidden p-8">
+            <div class="mb-6 bg-blue-50 border-l-4 border-blue-400 p-4 rounded-r-lg">
+                <div class="flex">
+                    <div class="flex-shrink-0">
+                        <svg class="h-5 w-5 text-blue-400" viewBox="0 0 20 20" fill="currentColor">
+                            <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd" />
+                        </svg>
+                    </div>
+                    <div class="ml-3">
+                        <p class="text-sm text-blue-700">
+                            <strong>¡Bóveda Desbloqueada!</strong> Aquí tienes las credenciales y la configuración de tu cuenta de correo. Esta información es confidencial.
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Detalles del Servicio (Nuevos campos: Dominio y Renovación) -->
+            <div class="bg-gray-50 rounded-xl p-5 border border-gray-200 mb-6 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                <div>
+                    <p class="text-xs font-medium text-gray-500 uppercase tracking-wider mb-1">Dominio Asignado</p>
+                    <p class="text-lg font-bold text-gray-800 flex items-center">
+                        <svg class="w-4 h-4 mr-2 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9"></path></svg>
+                        <span id="data-dominio">Cargando...</span>
+                    </p>
+                </div>
+                <div class="md:text-right">
+                    <p class="text-xs font-medium text-gray-500 uppercase tracking-wider mb-1">Próxima Renovación</p>
+                    <p class="text-md font-medium text-gray-700 flex items-center md:justify-end">
+                        <svg class="w-4 h-4 mr-1.5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
+                        <span id="data-renovacion">Cargando...</span>
+                    </p>
+                </div>
+            </div>
+
+            <!-- Soft Lavender Quick Setup Card -->
+            <div class="bg-[#f5f3ff] rounded-xl p-6 border border-[#e5e0ff] shadow-sm mb-8">
+                <h3 class="text-lg font-semibold text-[#5b4d99] border-b border-[#e5e0ff] pb-2 mb-4 flex items-center">
+                    <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
+                    Quick Setup / Resumen Rápido
+                </h3>
+                
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-y-4 gap-x-6">
+                    <div>
+                        <p class="text-xs font-medium text-[#7c6ec4] uppercase tracking-wider mb-1">Email</p>
+                        <p class="text-base font-semibold text-gray-900" id="quick-email">Cargando...</p>
+                    </div>
+                    <div>
+                        <p class="text-xs font-medium text-[#7c6ec4] uppercase tracking-wider mb-1">Username</p>
+                        <p class="text-base font-semibold text-primary bg-white px-2 py-0.5 rounded inline-block border border-purple-100 shadow-sm">
+                            Same as Email <span class="text-xs text-gray-500 ml-1 font-normal">(Mismo correo)</span>
+                        </p>
+                    </div>
+                    <div>
+                        <p class="text-xs font-medium text-[#7c6ec4] uppercase tracking-wider mb-1">Password</p>
+                        <p class="text-base font-mono font-medium text-gray-900" id="quick-pass">****</p>
+                    </div>
+                    <div>
+                        <p class="text-xs font-medium text-[#7c6ec4] uppercase tracking-wider mb-1">SMTP Server</p>
+                        <p class="text-base font-medium text-gray-900">my.mailbux.com</p>
+                    </div>
+                    <div>
+                        <p class="text-xs font-medium text-[#7c6ec4] uppercase tracking-wider mb-1">Port</p>
+                        <p class="text-base font-medium text-gray-900">587</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+                
+                <!-- Credenciales Principales -->
+                <div class="col-span-1 md:col-span-2">
+                    <h2 class="text-xl font-semibold text-gray-800 border-b pb-2 mb-4 flex items-center">
+                        <svg class="w-5 h-5 mr-2 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path></svg>
+                        Acceso a tu Cuenta de Correo
+                    </h2>
+                    
+                    <div class="space-y-4">
+                        <div class="bg-white rounded-lg p-4 border border-gray-200 shadow-sm flex justify-between items-center group">
+                            <div>
+                                <p class="text-xs font-medium text-gray-500 uppercase tracking-wider mb-1">Dirección de Correo</p>
+                                <p class="text-lg font-medium text-gray-900" id="data-correoComercial">Cargando...</p>
+                            </div>
+                            <button onclick="copyToClipboard('data-correoComercial', this)" class="copy-btn flex items-center text-sm bg-gray-50 border border-gray-200 text-gray-600 hover:text-primary hover:border-primary px-3 py-1.5 rounded shadow-sm focus:outline-none">
+                                <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path></svg>
+                                Copiar
+                            </button>
+                        </div>
+
+                        <div class="bg-white rounded-lg p-4 border border-gray-200 shadow-sm flex justify-between items-center group">
+                            <div>
+                                <p class="text-xs font-medium text-gray-500 uppercase tracking-wider mb-1">Clave de Acceso</p>
+                                <p class="text-lg font-medium text-gray-900 font-mono tracking-wider" id="data-claveAcceso">****</p>
+                            </div>
+                            <button onclick="copyToClipboard('data-claveAcceso', this)" class="copy-btn flex items-center text-sm bg-gray-50 border border-gray-200 text-gray-600 hover:text-primary hover:border-primary px-3 py-1.5 rounded shadow-sm focus:outline-none">
+                                <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path></svg>
+                                Copiar
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Configuración IMAP -->
+                <div>
+                    <h2 class="text-xl font-semibold text-gray-800 border-b pb-2 mb-4 flex items-center">
+                        <svg class="w-5 h-5 mr-2 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 15a4 4 0 004 4h9a5 5 0 10-.1-9.999 5.002 5.002 0 10-9.78 2.096A4.001 4.001 0 003 15z"></path></svg>
+                        Servidor Entrante (IMAP)
+                    </h2>
+                    
+                    <div class="space-y-3">
+                        <div class="flex justify-between items-center border-b border-gray-100 pb-2">
+                            <span class="text-sm text-gray-600">Servidor:</span>
+                            <div class="flex items-center">
+                                <span class="font-medium text-gray-900 mr-3" id="imap-server">my.mailbux.com</span>
+                                <button onclick="copyToClipboard('imap-server', this)" class="text-gray-400 hover:text-primary" title="Copiar"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path></svg></button>
+                            </div>
+                        </div>
+                        <div class="flex justify-between items-center border-b border-gray-100 pb-2">
+                            <span class="text-sm text-gray-600">Puerto:</span>
+                            <span class="font-medium text-gray-900 bg-gray-100 px-2 py-0.5 rounded text-sm">993</span>
+                        </div>
+                        <div class="flex justify-between items-center pb-2">
+                            <span class="text-sm text-gray-600">Seguridad:</span>
+                            <span class="font-medium text-green-600 flex items-center text-sm">
+                                <svg class="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clip-rule="evenodd"></path></svg>
+                                SSL
+                            </span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Configuración SMTP -->
+                <div>
+                    <h2 class="text-xl font-semibold text-gray-800 border-b pb-2 mb-4 flex items-center">
+                        <svg class="w-5 h-5 mr-2 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"></path></svg>
+                        Servidor Saliente (SMTP)
+                    </h2>
+                    
+                    <div class="space-y-3">
+                        <div class="flex justify-between items-center border-b border-gray-100 pb-2">
+                            <span class="text-sm text-gray-600">Servidor:</span>
+                            <div class="flex items-center">
+                                <span class="font-medium text-gray-900 mr-3" id="smtp-server-quick">my.mailbux.com</span>
+                                <button onclick="copyToClipboard('smtp-server-quick', this)" class="text-gray-400 hover:text-primary" title="Copiar"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path></svg></button>
+                            </div>
+                        </div>
+                        <div class="flex justify-between items-center border-b border-gray-100 pb-2">
+                            <span class="text-sm text-gray-600">Puerto:</span>
+                            <span class="font-medium text-gray-900 bg-gray-100 px-2 py-0.5 rounded text-sm">587</span>
+                        </div>
+                        <div class="flex justify-between items-center pb-2">
+                            <span class="text-sm text-gray-600">Seguridad:</span>
+                            <span class="font-medium text-green-600 flex items-center text-sm">
+                                <svg class="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clip-rule="evenodd"></path></svg>
+                                TLS
+                            </span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Configuración POP3 -->
+                <div>
+                    <h2 class="text-xl font-semibold text-gray-800 border-b pb-2 mb-4 flex items-center">
+                        <svg class="w-5 h-5 mr-2 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4"></path></svg>
+                        Servidor Entrante (POP3)
+                        <span class="ml-2 text-xs font-normal text-gray-500 bg-gray-100 px-2 py-0.5 rounded-full border border-gray-200">Legacy</span>
+                    </h2>
+                    
+                    <div class="space-y-3">
+                        <div class="flex justify-between items-center border-b border-gray-100 pb-2">
+                            <span class="text-sm text-gray-600">Servidor:</span>
+                            <div class="flex items-center">
+                                <span class="font-medium text-gray-900 mr-3" id="pop3-server">my.mailbux.com</span>
+                                <button onclick="copyToClipboard('pop3-server', this)" class="text-gray-400 hover:text-primary" title="Copiar"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path></svg></button>
+                            </div>
+                        </div>
+                        <div class="flex justify-between items-center border-b border-gray-100 pb-2">
+                            <span class="text-sm text-gray-600">Puerto:</span>
+                            <span class="font-medium text-gray-900 bg-gray-100 px-2 py-0.5 rounded text-sm">995</span>
+                        </div>
+                        <div class="flex justify-between items-center pb-2">
+                            <span class="text-sm text-gray-600">Seguridad:</span>
+                            <span class="font-medium text-green-600 flex items-center text-sm">
+                                <svg class="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clip-rule="evenodd"></path></svg>
+                                SSL
+                            </span>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+
+            <!-- Promotional Clickable Banner -->
+            <div class="mt-10">
+                <a href="https://mailerbox.me" target="_blank" class="block w-full overflow-hidden rounded-xl shadow-sm border border-gray-200 hover:opacity-90 hover:shadow-md transition-all duration-200 cursor-pointer">
+                    <!-- Just replace the 'src' below with your actual banner image URL and the 'href' above with your target link -->
+                    <img src="https://placehold.co/800x120/e2e8f0/8b84f5?text=Tu+Banner+Promocional+Aqui+(Haz+Click)" alt="Banner Promocional" class="w-full h-auto object-cover">
+                </a>
+            </div>
+
+            <!-- Footer support info -->
+            <div class="mt-8 pt-6 border-t border-gray-100 text-center">
+                <p class="text-sm text-gray-500">
+                    ¿Necesitas ayuda para configurar tu cuenta? <br class="md:hidden">
+                    Visita nuestro <a href="#" class="text-primary hover:underline font-medium">Centro de Soporte</a> o contáctanos.
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Notification -->
+    <div id="toast" class="toast flex items-center justify-center space-x-2">
+        <svg class="w-5 h-5 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+        <span>Copiado al portapapeles</span>
+    </div>
+
+    <script>
+        // ==========================================
+        // IMPORTANTE: REEMPLAZA ESTA URL CON LA URL 
+        // PUBLICA DE TU GOOGLE APPS SCRIPT WEB APP
+        // ==========================================
+        const SCRIPT_URL = 'YOUR_GOOGLE_SCRIPT_WEB_APP_URL';
+
+        // --- NAVEGACIÓN Y VISTAS ---
+        function showView(viewId) {
+            // Ocultar todas
+            document.getElementById('login-view').classList.add('hidden');
+            document.getElementById('register-view').classList.add('hidden');
+            document.getElementById('dashboard-view').classList.add('hidden');
+            
+            // Ocultar alertas
+            document.getElementById('login-error').classList.add('hidden');
+            document.getElementById('register-error').classList.add('hidden');
+            document.getElementById('login-success').classList.add('hidden');
+
+            // Actualizar UI Header
+            const subtitle = document.getElementById('header-subtitle');
+            const logoutBtn = document.getElementById('logout-btn');
+
+            if (viewId === 'dashboard-view') {
+                subtitle.innerText = "Detalles de tu Cuenta de Correo Comercial";
+                logoutBtn.classList.remove('hidden');
+            } else {
+                subtitle.innerText = "Bóveda de Cliente Segura";
+                logoutBtn.classList.add('hidden');
+                
+                // Limpiar formularios al salir
+                document.getElementById('login-form').reset();
+                document.getElementById('register-form').reset();
+            }
+
+            // Mostrar la seleccionada
+            document.getElementById(viewId).classList.remove('hidden');
+        }
+
+        function toggleLoading(show) {
+            const overlay = document.getElementById('loading-overlay');
+            if (show) {
+                overlay.classList.remove('hidden');
+                overlay.classList.add('flex');
+            } else {
+                overlay.classList.add('hidden');
+                overlay.classList.remove('flex');
+            }
+        }
+
+        // --- LÓGICA DE API EXTERNA (FETCH) ---
+        
+        // Manejar Registro
+        async function handleRegister(e) {
+            e.preventDefault();
+            const email = document.getElementById('reg-email').value;
+            const pass = document.getElementById('reg-pass').value;
+            const errorDiv = document.getElementById('register-error');
+            
+            toggleLoading(true);
+
+            if (SCRIPT_URL === 'YOUR_GOOGLE_SCRIPT_WEB_APP_URL') {
+                toggleLoading(false);
+                errorDiv.innerText = "Por favor, configura tu SCRIPT_URL en el código HTML primero.";
+                errorDiv.classList.remove('hidden');
+                return;
+            }
+
+            try {
+                // Se envía la petición POST al backend
+                const response = await fetch(SCRIPT_URL, {
+                    method: 'POST',
+                    body: JSON.stringify({ action: 'register', email: email, password: pass }),
+                    headers: {
+                        'Content-Type': 'text/plain;charset=utf-8',
+                    }
+                });
+                
+                const result = await response.json();
+                toggleLoading(false);
+
+                if(result.success) {
+                    showView('login-view');
+                    const successDiv = document.getElementById('login-success');
+                    successDiv.innerText = result.message;
+                    successDiv.classList.remove('hidden');
+                } else {
+                    errorDiv.innerText = result.message;
+                    errorDiv.classList.remove('hidden');
+                }
+            } catch (error) {
+                toggleLoading(false);
+                errorDiv.innerText = "Error del servidor: Ocurrió un problema de conexión CORS o red.";
+                errorDiv.classList.remove('hidden');
+                console.error(error);
+            }
+        }
+
+        // Manejar Login
+        async function handleLogin(e) {
+            e.preventDefault();
+            const email = document.getElementById('login-email').value;
+            const pass = document.getElementById('login-pass').value;
+            const errorDiv = document.getElementById('login-error');
+            
+            toggleLoading(true);
+
+            if (SCRIPT_URL === 'YOUR_GOOGLE_SCRIPT_WEB_APP_URL') {
+                toggleLoading(false);
+                errorDiv.innerText = "Por favor, configura tu SCRIPT_URL en el código HTML primero.";
+                errorDiv.classList.remove('hidden');
+                return;
+            }
+
+            try {
+                // Se envía la petición POST al backend
+                const response = await fetch(SCRIPT_URL, {
+                    method: 'POST',
+                    body: JSON.stringify({ action: 'login', email: email, password: pass }),
+                    headers: {
+                        'Content-Type': 'text/plain;charset=utf-8',
+                    }
+                });
+                
+                const result = await response.json();
+                toggleLoading(false);
+
+                if(result.success) {
+                    // Inyectar datos en el dashboard
+                    document.getElementById('data-dominio').innerText = result.data.dominio;
+                    document.getElementById('data-renovacion').innerText = result.data.renovacion;
+                    document.getElementById('data-correoComercial').innerText = result.data.correoComercial;
+                    document.getElementById('data-claveAcceso').innerText = result.data.claveAcceso;
+                    
+                    // Llenar datos de la nueva tarjeta Quick Setup
+                    document.getElementById('quick-email').innerText = result.data.correoComercial;
+                    document.getElementById('quick-pass').innerText = result.data.claveAcceso;
+                    
+                    showView('dashboard-view');
+                } else {
+                    errorDiv.innerText = result.message;
+                    errorDiv.classList.remove('hidden');
+                }
+            } catch (error) {
+                toggleLoading(false);
+                errorDiv.innerText = "Error del servidor: Ocurrió un problema de conexión CORS o red.";
+                errorDiv.classList.remove('hidden');
+                console.error(error);
+            }
+        }
+
+        // --- FUNCIONES ORIGINALES (Copiar) ---
+        function copyToClipboard(elementId, btnElement) {
+            const textToCopy = document.getElementById(elementId).innerText;
+            const textArea = document.createElement("textarea");
+            textArea.value = textToCopy;
+            
+            textArea.style.top = "0";
+            textArea.style.left = "0";
+            textArea.style.position = "fixed";
+
+            document.body.appendChild(textArea);
+            textArea.focus();
+            textArea.select();
+
+            try {
+                const successful = document.execCommand('copy');
+                if(successful) {
+                    const originalHTML = btnElement.innerHTML;
+                    if (btnElement.classList.contains('px-3')) {
+                        btnElement.innerHTML = '<svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg> ¡Copiado!';
+                        btnElement.classList.add('text-green-600', 'border-green-600', 'bg-green-50');
+                        btnElement.classList.remove('text-gray-600', 'border-gray-200', 'bg-gray-50');
+                    } else {
+                        btnElement.classList.add('text-green-500');
+                    }
+
+                    showToast();
+
+                    setTimeout(() => {
+                        btnElement.innerHTML = originalHTML;
+                        if (btnElement.classList.contains('px-3')) {
+                            btnElement.classList.remove('text-green-600', 'border-green-600', 'bg-green-50');
+                            btnElement.classList.add('text-gray-600', 'border-gray-200', 'bg-gray-50');
+                        } else {
+                            btnElement.classList.remove('text-green-500');
+                        }
+                    }, 2000);
+                }
+            } catch (err) {
+                console.error('No se pudo copiar el texto', err);
+                alert("Error al copiar al portapapeles.");
+            }
+            document.body.removeChild(textArea);
+        }
+
+        function showToast() {
+            const toast = document.getElementById("toast");
+            toast.className = "toast show flex items-center justify-center space-x-2";
+            setTimeout(function(){ 
+                toast.className = toast.className.replace("show", ""); 
+            }, 3000);
+        }
+    </script>
+</body>
+</html>
