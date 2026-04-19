@@ -1,0 +1,246 @@
+// ==========================================
+// CONFIGURATION
+// ==========================================
+const SHEET_ID = '1OacpvT8vGNv6H8Nl2yNngTjOkDNifuS4oG3lav9Vljw';
+const SHEET_NAME = 'Sheet1'; // Ensure your tab is named exactly this
+
+// Admin Notifications Configuration
+const ADMIN_EMAIL = 'bebell.digitalsolutions@gmail.com';
+
+// WhatsApp Cloud API Configuration (Meta)
+const WA_TOKEN = 'YOUR_META_WHATSAPP_ACCESS_TOKEN';
+const WA_PHONE_NUMBER_ID = 'YOUR_META_PHONE_NUMBER_ID';
+const WA_TARGET_PHONE = 'YOUR_ADMIN_PHONE_NUMBER'; // e.g., '18095551234' (Include Country Code, no plus sign)
+const WA_TEMPLATE_NAME = 'YOUR_APPROVED_TEMPLATE_NAME'; // The name of the template approved in Meta Business
+const WA_TEMPLATE_LANG = 'en_US'; // or 'es_ES', 'es_MX', etc.
+
+// ==========================================
+// 1. API RECEIVER (For GitHub Frontend)
+// ==========================================
+function doPost(e) {
+  let response = {};
+  
+  try {
+    const params = JSON.parse(e.postData.contents);
+    const action = params.action;
+    
+    if (action === 'register') {
+      response = registerUser(params.email, params.password);
+    } else if (action === 'login') {
+      response = loginUser(params.email, params.password);
+    } else {
+      response = { success: false, message: 'Invalid action requested.' };
+    }
+  } catch (error) {
+    response = { success: false, message: 'Server error processing request: ' + error.toString() };
+  }
+
+  return ContentService.createTextOutput(JSON.stringify(response))
+    .setMimeType(ContentService.MimeType.JSON);
+}
+
+// ==========================================
+// 2. REGISTER FUNCTION
+// ==========================================
+function registerUser(email, password) {
+  const sheet = SpreadsheetApp.openById(SHEET_ID).getSheetByName(SHEET_NAME);
+  const data = sheet.getDataRange().getValues();
+  
+  // Check if email already exists
+  for (let i = 1; i < data.length; i++) {
+    if (data[i][1].toString().toLowerCase() === email.toLowerCase()) {
+      return { success: false, message: 'Este correo ya está registrado.' };
+    }
+  }
+  
+  // Create a simple unique UserID
+  const userId = 'USR-' + Utilities.getUuid().substring(0,8).toUpperCase();
+  
+  // Append new row
+  sheet.appendRow([userId, email, password, 'Pendiente...', 'Pendiente...', 'Pendiente...', 'Pendiente...', 'Activo', '', 'Por definir']);
+  
+  // --- NEW SECURITY UPDATE ---
+  const lastRow = sheet.getLastRow();
+  sheet.getRange(lastRow, 3).setFontColor('#ffffff'); // Hides Clave_Registro
+  sheet.getRange(lastRow, 7).setFontColor('#ffffff'); // Hides Clave_Acceso
+  // ---------------------------
+
+  // TRIGGER ADMIN NOTIFICATIONS
+  sendAdminNotifications(email);
+
+  return { success: true, message: 'Cuenta creada exitosamente. Por favor, inicia sesión.' };
+}
+
+// ==========================================
+// 3. ADMIN NOTIFICATION HELPER
+// ==========================================
+function sendAdminNotifications(newUserEmail) {
+  const now = new Date();
+  const dateTimeStr = Utilities.formatDate(now, Session.getScriptTimeZone(), "dd/MM/yyyy HH:mm:ss");
+
+  // --- A. SEND EMAIL NOTIFICATION ---
+  const emailSubject = "New user registered in Mailerbox Client Portal";
+  const emailBody = `New user just registered in Mailerbox Client Portal\n\nEmail: ${newUserEmail}\nDate/Time: ${dateTimeStr}`;
+  
+  try {
+    GmailApp.sendEmail(ADMIN_EMAIL, emailSubject, emailBody);
+  } catch (e) {
+    Logger.log("Failed to send admin email: " + e.toString());
+  }
+
+  // --- B. SEND WHATSAPP TEMPLATE NOTIFICATION ---
+  if (WA_TOKEN === 'YOUR_META_WHATSAPP_ACCESS_TOKEN') {
+    Logger.log("WhatsApp not configured yet. Skipping.");
+    return; // Exit if WA isn't configured
+  }
+
+  const waUrl = `https://graph.facebook.com/v19.0/${WA_PHONE_NUMBER_ID}/messages`;
+  
+  // Note: To use this, your Meta template MUST be approved and set up to accept 2 variables: {{1}} for email, and {{2}} for datetime.
+  const payload = {
+    messaging_product: "whatsapp",
+    to: WA_TARGET_PHONE,
+    type: "template",
+    template: {
+      name: WA_TEMPLATE_NAME,
+      language: {
+        code: WA_TEMPLATE_LANG
+      },
+      components: [
+        {
+          type: "body",
+          parameters: [
+            { type: "text", text: newUserEmail }, // Maps to {{1}} in your Meta template
+            { type: "text", text: dateTimeStr }   // Maps to {{2}} in your Meta template
+          ]
+        }
+      ]
+    }
+  };
+
+  const options = {
+    method: "post",
+    contentType: "application/json",
+    headers: {
+      "Authorization": `Bearer ${WA_TOKEN}`
+    },
+    payload: JSON.stringify(payload),
+    muteHttpExceptions: true
+  };
+
+  try {
+    const waResponse = UrlFetchApp.fetch(waUrl, options);
+    Logger.log("WA Response: " + waResponse.getContentText());
+  } catch (e) {
+    Logger.log("Failed to send WhatsApp message: " + e.toString());
+  }
+}
+
+// ==========================================
+// 4. LOGIN FUNCTION
+// ==========================================
+function loginUser(email, password) {
+  const sheet = SpreadsheetApp.openById(SHEET_ID).getSheetByName(SHEET_NAME);
+  const data = sheet.getDataRange().getValues();
+  
+  for (let i = 1; i < data.length; i++) {
+    let sheetEmail = data[i][1].toString().toLowerCase();
+    let sheetPass = data[i][2].toString();
+    
+    if (sheetEmail === email.toLowerCase() && sheetPass === password) {
+      let rawFecha = data[i][4];
+      let fechaFormateada = rawFecha;
+      if (rawFecha instanceof Date) {
+        fechaFormateada = Utilities.formatDate(rawFecha, Session.getScriptTimeZone(), "dd/MM/yyyy");
+      }
+
+      return {
+        success: true,
+        data: {
+          dominio: data[i][3] || 'No asignado',
+          renovacion: fechaFormateada || 'No asignado',
+          correoComercial: data[i][5] || 'Procesando...',
+          claveAcceso: data[i][6] || 'Procesando...'
+        }
+      };
+    }
+  }
+  return { success: false, message: 'Correo o contraseña incorrectos.' };
+}
+
+// ==========================================
+// 5. AUTOMATED EMAIL NOTIFICATION FUNCTION
+// ==========================================
+function revisarRenovacionesYNotificar() {
+  const sheet = SpreadsheetApp.openById(SHEET_ID).getSheetByName(SHEET_NAME);
+  const data = sheet.getDataRange().getValues();
+  
+  const hoy = new Date();
+  hoy.setHours(0, 0, 0, 0); 
+
+  const aliases = GmailApp.getAliases();
+  const remitente = aliases.includes('no-reply@mailerbox.me') ? 'no-reply@mailerbox.me' : Session.getActiveUser().getEmail();
+
+  for (let i = 1; i < data.length; i++) {
+    let email = data[i][1];
+    let dominio = data[i][3];
+    let fechaRenovacion = data[i][4];
+    let estadoCuenta = data[i][7]; 
+    let notificacionEnviada = data[i][8]; 
+    
+    if (estadoCuenta !== 'Activo' || !(fechaRenovacion instanceof Date)) continue;
+
+    let tiempoRestante = fechaRenovacion.getTime() - hoy.getTime();
+    let diasFaltantes = Math.ceil(tiempoRestante / (1000 * 3600 * 24));
+    
+    let asunto = '';
+    let cuerpo = '';
+    let nuevoEstadoNotificacion = '';
+
+    if (diasFaltantes === 7 && notificacionEnviada !== 'Aviso 7 días') {
+      asunto = `Aviso: Tu servicio para ${dominio} vence en 7 días`;
+      cuerpo = `Hola,\n\nTe recordamos que tu servicio de correo comercial para el dominio ${dominio} vencerá el ${Utilities.formatDate(fechaRenovacion, Session.getScriptTimeZone(), "dd/MM/yyyy")}.\n\nPor favor, renueva a tiempo para evitar la suspensión de tu cuenta.\n\nSaludos,\nEl equipo de MAILERBOX.ME`;
+      nuevoEstadoNotificacion = 'Aviso 7 días';
+    } 
+    else if (diasFaltantes === 1 && notificacionEnviada !== 'Aviso 1 día') {
+      asunto = `URGENTE: Tu servicio para ${dominio} vence MAÑANA`;
+      cuerpo = `Hola,\n\nEste es un recordatorio de que tu servicio de correo para ${dominio} vence mañana.\n\nEvita la interrupción del servicio renovando hoy mismo.\n\nSaludos,\nEl equipo de MAILERBOX.ME`;
+      nuevoEstadoNotificacion = 'Aviso 1 día';
+    } 
+    else if (diasFaltantes < 0 && notificacionEnviada !== 'Expirado') {
+      asunto = `Aviso: Tu servicio para ${dominio} ha expirado`;
+      cuerpo = `Hola,\n\nTu cuenta para el dominio ${dominio} ha expirado. El servicio podría ser suspendido en cualquier momento.\n\nPor favor contáctanos lo antes posible para restablecer tu cuenta.\n\nSaludos,\nEl equipo de MAILERBOX.ME`;
+      nuevoEstadoNotificacion = 'Expirado';
+    }
+
+    if (nuevoEstadoNotificacion !== '') {
+      GmailApp.sendEmail(email, asunto, cuerpo, {
+        from: remitente,
+        name: 'MAILERBOX.ME'
+      });
+      sheet.getRange(i + 1, 9).setValue(nuevoEstadoNotificacion);
+    }
+  }
+}
+
+// ==========================================
+// 6. TRIGGERS & FALLBACK
+// ==========================================
+function instalarDisparadorDiario() {
+  const triggers = ScriptApp.getProjectTriggers();
+  for (let i = 0; i < triggers.length; i++) {
+    ScriptApp.deleteTrigger(triggers[i]);
+  }
+  
+  ScriptApp.newTrigger('revisarRenovacionesYNotificar')
+    .timeBased()
+    .everyDays(1)
+    .atHour(8)
+    .create();
+    
+  Logger.log("Daily trigger installed successfully!");
+}
+
+function doGet(e) {
+  return ContentService.createTextOutput("MAILERBOX API is running.");
+}
